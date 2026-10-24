@@ -78,7 +78,7 @@ print()
 
 # Import and run the main app
 try:
-    from main import app
+    from core.app import app
     app.run(host="0.0.0.0", port=5000, debug=False, threaded=True)
 except Exception as e:
     print(f"\n✗ Server failed to start: {e}")

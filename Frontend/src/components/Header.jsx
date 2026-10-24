@@ -8,16 +8,12 @@ export default function Header() {
   const navigate = useNavigate()
   const { status } = useSession()
   const isLive = status === 'running'
-  const [user, setUser] = useState(null)
+  const [user] = useState(() => {
+    const userData = localStorage.getItem('user')
+    return userData ? JSON.parse(userData) : null
+  })
   const [showUserMenu, setShowUserMenu] = useState(false)
   const menuRef = useRef(null)
-
-  useEffect(() => {
-    const userData = localStorage.getItem('user')
-    if (userData) {
-      setUser(JSON.parse(userData))
-    }
-  }, [])
 
   // Close menu when clicking outside
   useEffect(() => {

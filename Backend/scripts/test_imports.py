@@ -16,7 +16,7 @@ except ImportError as e:
     print(f"✗ jwt import failed: {e}")
 
 try:
-    from auth import create_user, login_user
+    from auth.auth import create_user, login_user
     print("✓ auth module imported successfully")
 except Exception as e:
     print(f"✗ auth module import failed: {e}")

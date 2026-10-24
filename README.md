@@ -156,7 +156,7 @@ Create a `.env` file in the Backend directory:
 ```env
 MONGO_URI=mongodb://localhost:27017
 JWT_SECRET=your-secret-key-change-in-production
-MODEL_PATH=models/yolov8n.pt
+MODEL_PATH=models/box_detection.pt
 ```
 
 ### 4. MongoDB Setup
@@ -177,7 +177,8 @@ sudo systemctl start mongod
 
 The YOLOv5n model will be downloaded automatically on first run, or you can manually place it:
 ```bash
-# Place yolov8n.pt in Backend/models/
+# Custom model: Backend/models/box_detection.pt
+# Fallback (used if the custom model is missing): Backend/models/yolov8n.pt
 ```
 
 ---
@@ -193,7 +194,7 @@ Ensure MongoDB is running on `mongodb://localhost:27017`
 ```bash
 cd Backend
 # Activate venv if not already activated
-python main.py
+python -m core.app
 ```
 Backend will run on `http://localhost:5000`
 
@@ -308,20 +309,22 @@ boxguard/
 │   └── vite.config.js          # Vite configuration
 │
 ├── Backend/                     # Python Flask backend
-│   ├── models/                 # AI models
-│   │   └── yolov5n.pt         # YOLOv5 model
-│   ├── main.py                # Main API server
-│   ├── auth.py                # Authentication logic
-│   ├── database.py            # MongoDB operations
-│   ├── detection.py           # YOLOv8 box detection
-│   ├── pdf_generator.py       # Challan PDF generation
-│   ├── video_recorder.py      # Video recording
+│   ├── core/                  # app.py (API server), database, detection, tracker
+│   ├── services/              # pdf_generator.py, video_recorder.py
+│   ├── auth/                  # auth.py (JWT authentication)
+│   ├── scripts/               # Manual debug/diagnostic scripts
+│   ├── models/                # box_detection.pt (custom), yolov8n.pt (fallback)
 │   ├── requirements.txt       # Python dependencies
 │   └── .env                   # Environment variables
 │
-├── challans/                   # Generated PDF challans
-├── recordings/                 # Session video recordings
-├── uploads/                    # Uploaded videos
+├── data/                       # Runtime output (git-ignored)
+│   ├── challans/              # Generated PDF challans
+│   ├── recordings/            # Session video recordings
+│   └── uploads/               # Uploaded videos
+│
+├── docs/                       # DESIGN_SYSTEM.md, PROJECT_STRUCTURE.md
+├── archive/                    # Superseded early implementation
+├── start.bat                   # Starts backend + frontend (Windows)
 └── README.md                   # This file
 ```
 
@@ -339,7 +342,7 @@ MONGO_URI=mongodb://localhost:27017
 JWT_SECRET=your-secret-key-change-in-production
 
 # AI Model
-MODEL_PATH=models/yolov8n.pt
+MODEL_PATH=models/box_detection.pt
 
 # Server Settings
 FLASK_ENV=development

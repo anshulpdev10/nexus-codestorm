@@ -3,7 +3,7 @@
 import sys
 sys.path.insert(0, '.')
 
-from main import app
+from core.app import app
 
 print("=" * 60)
 print("Registered Routes:")

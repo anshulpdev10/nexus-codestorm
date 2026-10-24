@@ -32,6 +32,8 @@ export default function Tooltip({ children, label, placement = 'top' }) {
         <AnimatePresence>
           {open && (
             <motion.div
+              // refs.setFloating is a callback ref, not a ref read; this is the documented Floating UI usage
+              // eslint-disable-next-line react-hooks/refs
               ref={refs.setFloating}
               style={floatingStyles}
               {...getFloatingProps()}

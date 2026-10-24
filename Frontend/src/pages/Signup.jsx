@@ -42,7 +42,6 @@ export default function Signup() {
     if (/[@$!%*?&]/.test(password)) score++
     else messages.push('special character (@$!%*?&)')
 
-    const strengthLevels = ['Very Weak', 'Weak', 'Fair', 'Good', 'Strong']
     return {
       score,
       message: score === 5 ? 'Strong password!' : `Missing: ${messages.join(', ')}`

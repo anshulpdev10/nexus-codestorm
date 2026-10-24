@@ -167,11 +167,6 @@ export default function Dashboard() {
     }
   }, [source, videoFile, batchId, operatorId, confidence, start])
 
-  // Stats calculations for the mockup block
-  const totalSessions = sessions.length
-  const totalBoxes = sessions.reduce((acc, s) => acc + (s.final_count || 0), 0)
-  const avgPerSession = totalSessions > 0 ? (totalBoxes / totalSessions).toFixed(1) : '0.0'
-
   // ── STEP 1: Setup screen ──────────────────────────────────
   if (isIdle) return (
     <div className="flex-1 flex flex-col items-center justify-center bg-transparent p-6 relative overflow-hidden">

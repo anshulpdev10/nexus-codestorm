@@ -5,7 +5,7 @@ Professional Flask-based backend for the Warehouse Box Counter system.
 ## Project Structure
 
 ```
-backend/
+Backend/
 ├── core/                     # Core application modules
 │   ├── __init__.py
 │   ├── app.py               # Main Flask application
@@ -19,18 +19,16 @@ backend/
 ├── auth/                    # Authentication (optional)
 │   ├── __init__.py
 │   └── auth.py              # JWT-based authentication
-├── utils/                   # Utility scripts
-│   ├── __init__.py
-│   └── start_server.py      # Helper startup script
-├── tests/                   # Test and debug scripts
+├── scripts/                 # Manual debug/diagnostic scripts (run with python -m scripts.<name>)
 │   ├── check_sessions.py
 │   ├── debug_batch.py
+│   ├── start_server.py      # Dependency check + start
 │   ├── test_confidence.py
 │   ├── test_imports.py
 │   ├── test_routes.py
 │   └── test_server.html
 ├── models/                  # YOLO model files
-│   ├── best.pt             # Custom trained model
+│   ├── box_detection.pt    # Custom trained model
 │   └── yolov8n.pt          # Fallback generic model
 ├── .env                     # Environment configuration
 ├── requirements.txt         # Python dependencies
@@ -42,7 +40,7 @@ backend/
 ### 1. Install Dependencies
 
 ```bash
-cd backend
+cd Backend
 pip install -r requirements.txt
 ```
 
@@ -52,7 +50,7 @@ Edit `.env` file with your MongoDB connection:
 
 ```env
 MONGO_URI=mongodb+srv://username:password@cluster.mongodb.net/warehouse_counter
-MODEL_PATH=models/best.pt
+MODEL_PATH=models/box_detection.pt
 JWT_SECRET=your-secret-key
 ```
 
@@ -65,7 +63,7 @@ python -m core.app
 Or use the helper script:
 
 ```bash
-python -m utils.start_server
+python -m scripts.start_server
 ```
 
 Server runs on `http://localhost:5000`
@@ -169,8 +167,8 @@ python test_confidence.py
 ### Debug
 
 ```bash
-python tests/check_sessions.py
-python tests/debug_batch.py
+python -m scripts.check_sessions
+python -m scripts.debug_batch
 ```
 
 ## Production Notes

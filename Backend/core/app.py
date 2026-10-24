@@ -3,6 +3,7 @@ from datetime import datetime
 import json
 import os
 import re
+import sys
 import cv2
 import numpy as np
 from flask import Flask, jsonify, send_file, request, Response
@@ -10,7 +11,13 @@ from flask_cors import CORS
 from flask_sock import Sock
 from dotenv import load_dotenv
 
-load_dotenv()
+# Windows consoles default to cp1252, which can't print the ✓/✗ log markers
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+
+BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+load_dotenv(os.path.join(BACKEND_DIR, ".env"))
 
 from core.database import (
     create_session, end_session, get_session,
@@ -78,12 +85,12 @@ CORS(app,
 
 sock = Sock(app)
 
-MODEL_PATH   = os.path.join(os.path.dirname(__file__), "..", "Backend", "models", os.getenv("MODEL_PATH", "best.pt"))
+MODEL_PATH   = os.path.join(BACKEND_DIR, os.getenv("MODEL_PATH", "models/box_detection.pt"))
 FRAME_WIDTH  = 1280
 FRAME_HEIGHT = 720
 LOG_EVERY_N  = 30
 
-UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "data", "uploads")
+UPLOAD_DIR = os.path.join(BACKEND_DIR, "..", "data", "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 # Load YOLO model once at startup
@@ -104,12 +111,12 @@ BATCH_ID_RE = re.compile(r"^[A-Z][A-Z0-9]*-\d{3,}$")
 OPERATOR_ID_RE = re.compile(r"^OP-\d{3,}$")
 
 
-def _validate_batch_id(batch_id: str):
+def _validate_batch_id(batch_id: str, user_id: str = None):
     if not batch_id:
         return "Batch ID is required."
     if not BATCH_ID_RE.match(batch_id):
         return "Batch ID must be uppercase in format WORD-XXX (e.g. BATCH-001, WH-001). Minimum 3 digits required."
-    if batch_id_exists(batch_id):
+    if batch_id_exists(batch_id, user_id):
         return f"Batch ID '{batch_id}' already exists. Use a unique batch ID."
     return None
 
@@ -414,7 +421,7 @@ def validate_batch():
     # Handle preflight request
     if request.method == "OPTIONS":
         response = jsonify({"status": "ok"})
-        response.headers.add('Access-Control-Allow-Origin', 'http://localhost:5174')
+        response.headers.add('Access-Control-Allow-Origin', 'http://localhost:5173')
         response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
         response.headers.add('Access-Control-Allow-Methods', 'POST,OPTIONS')
         return response, 200
@@ -425,15 +432,9 @@ def validate_batch():
 
     print(f"[validate_batch] Checking batch_id='{batch_id}' for user_id='{user_id}'")
 
-    error = _validate_batch_id(batch_id)
+    error = _validate_batch_id(batch_id, user_id)
     if error:
         return jsonify({"valid": False, "error": error}), 200
-
-    exists = batch_id_exists(batch_id, user_id)
-    print(f"[validate_batch] batch_id_exists returned: {exists}")
-    
-    if exists:
-        return jsonify({"valid": False, "error": f"Batch ID '{batch_id}' already exists. Use a unique batch ID."}), 400
 
     return jsonify({"valid": True})
 
@@ -777,7 +778,7 @@ def websocket_stream(ws):
     user_id      = init.get("user_id", None)
 
     try:
-        batch_error = _validate_batch_id(batch_id)
+        batch_error = _validate_batch_id(batch_id, user_id)
         if batch_error:
             ws.send(json.dumps({"error": batch_error}))
             return
@@ -785,10 +786,6 @@ def websocket_stream(ws):
         operator_error = _validate_operator_id(operator_id)
         if operator_error:
             ws.send(json.dumps({"error": operator_error}))
-            return
-
-        if batch_id_exists(batch_id, user_id):
-            ws.send(json.dumps({"error": f"Batch ID '{batch_id}' already exists. Use a unique batch ID."}))
             return
 
         source_type = "upload" if video_path else "live"

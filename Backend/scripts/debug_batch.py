@@ -1,4 +1,4 @@
-from database import sessions_col
+from core.database import sessions_col
 
 # Check all sessions with batch_id "BATCH-20000"
 sessions = list(sessions_col.find({"batch_id": "BATCH-20000"}))

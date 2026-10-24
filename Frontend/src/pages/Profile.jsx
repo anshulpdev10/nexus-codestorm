@@ -36,6 +36,7 @@ export default function Profile() {
 
   useEffect(() => {
     fetchProfile()
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- fetch once on mount
   }, [])
 
   const fetchProfile = async () => {

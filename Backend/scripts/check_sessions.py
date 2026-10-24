@@ -2,7 +2,7 @@
 """
 Quick script to check what sessions exist in MongoDB
 """
-from database import sessions_col, list_sessions
+from core.database import sessions_col, list_sessions
 from bson import ObjectId
 
 print("=" * 60)

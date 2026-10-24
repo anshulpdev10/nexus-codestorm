@@ -8,7 +8,7 @@ Duplicate/overlapping detections are suppressed via NMS (IoU threshold).
 import os
 import cv2
 import numpy as np
-from tracker import CentroidTracker
+from core.tracker import CentroidTracker
 
 CONF_THRESHOLD = 0.35
 NMS_IOU        = 0.40   # boxes with IoU > this are considered duplicates and merged

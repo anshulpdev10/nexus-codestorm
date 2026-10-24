@@ -50,11 +50,29 @@ Thumbs.db
 *.sw?
 
 # ── Generated output (keep local only) ───────────────────────
+data/recordings/
+data/challans/
+data/uploads/
 recordings/
 challans/
 uploads/
+
+# ── Archive ───────────────────────────────────────────────────
+archive/ai/__pycache__/
+archive/ai/data/*.mp4
+
+# ── Old Backend folder (after restructure) ────────────────────
+Backend/__pycache__/
+Backend/venv/
 
 *.env.*.local
 .env.development.local
 .env.test.local
 .env.production.local
+
+# Added by push-to-github.ps1
+.env.*
+!.env.example
+.venv/
+*.pyc
+.expo/

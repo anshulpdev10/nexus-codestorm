@@ -2,7 +2,7 @@ import cv2
 import os
 from datetime import datetime
 
-RECORDINGS_DIR = os.path.join(os.path.dirname(__file__), "..", "recordings")
+RECORDINGS_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "data", "recordings")
 os.makedirs(RECORDINGS_DIR, exist_ok=True)
 
 # Codec priority: MJPEG in AVI is universally browser-playable

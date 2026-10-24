@@ -9,7 +9,7 @@ from reportlab.lib.units import cm
 from reportlab.lib import colors
 from reportlab.platypus import Table, TableStyle
 
-CHALLANS_DIR = os.path.join(os.path.dirname(__file__), "..", "challans")
+CHALLANS_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "data", "challans")
 os.makedirs(CHALLANS_DIR, exist_ok=True)
 
 W, H = A4

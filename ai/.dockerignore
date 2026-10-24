@@ -1,7 +1,0 @@
-venv/
-data/
-*.pt
-__pycache__/
-*.pyc
-.env
-.git

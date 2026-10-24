@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from database import (
+from core.database import (
     create_session, end_session, get_session,
     list_sessions, log_detection, get_logs_for_session,
     get_operator_stats, delete_session, batch_id_exists,
@@ -20,7 +20,7 @@ from database import (
 
 # Try to import auth module, but don't fail if dependencies are missing
 try:
-    from auth import create_user, login_user, verify_token, get_user_by_id
+    from auth.auth import create_user, login_user, verify_token, get_user_by_id
     AUTH_ENABLED = True
     print("[main] ✓ Authentication module loaded successfully")
 except ImportError as e:
@@ -28,9 +28,9 @@ except ImportError as e:
     print(f"[main] ✗ Authentication disabled - missing dependencies: {e}")
     print("[main] Run: pip install bcrypt pyjwt")
 
-from video_recorder import VideoRecorder
-from pdf_generator import generate_challan
-from detection import BoxCounter
+from services.video_recorder import VideoRecorder
+from services.pdf_generator import generate_challan
+from core.detection import BoxCounter
 
 
 # ── Authentication Middleware ─────────────────────────────────────────────────
@@ -78,12 +78,12 @@ CORS(app,
 
 sock = Sock(app)
 
-MODEL_PATH   = os.path.join(os.path.dirname(__file__), os.getenv("MODEL_PATH", "models/best.pt"))
+MODEL_PATH   = os.path.join(os.path.dirname(__file__), "..", "Backend", "models", os.getenv("MODEL_PATH", "best.pt"))
 FRAME_WIDTH  = 1280
 FRAME_HEIGHT = 720
 LOG_EVERY_N  = 30
 
-UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "..", "uploads")
+UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "data", "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 # Load YOLO model once at startup
@@ -304,7 +304,7 @@ def profile():
             if not update_fields:
                 return jsonify({"error": "No fields to update"}), 400
 
-            from database import db
+            from core.database import db
             from bson import ObjectId
 
             result = db.users.update_one(
@@ -580,7 +580,7 @@ def upload_video():
         if video_file.filename == '':
             return jsonify({"error": "No file selected"}), 400
 
-        uploads_dir = os.path.join(os.path.dirname(__file__), "..", "uploads")
+        uploads_dir = os.path.join(os.path.dirname(__file__), "..", "..", "data", "uploads")
         os.makedirs(uploads_dir, exist_ok=True)
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -848,7 +848,7 @@ def websocket_stream(ws):
 
                 if counter:
                     try:
-                        from tracker import CentroidTracker
+                        from core.tracker import CentroidTracker
                         counter._tracker = CentroidTracker()
                     except ImportError:
                         pass

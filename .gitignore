@@ -76,3 +76,6 @@ Backend/venv/
 .venv/
 *.pyc
 .expo/
+
+# Private project-check report (owner only)
+ERROR_REPORT.pdf

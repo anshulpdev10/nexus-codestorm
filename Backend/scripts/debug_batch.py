@@ -1,14 +1,19 @@
-from core.database import sessions_col
+"""
+Show all sessions for a batch ID.
+Run from the Backend folder:  python -m scripts.debug_batch
+"""
+from core.database import supabase
 
-# Check all sessions with batch_id "BATCH-20000"
-sessions = list(sessions_col.find({"batch_id": "BATCH-20000"}))
+BATCH = "BATCH-20000"
 
-print(f"Found {len(sessions)} session(s) with batch_id 'BATCH-20000':")
-for session in sessions:
-    print(f"  Session ID: {session['_id']}")
-    print(f"  User ID: {session.get('user_id', 'NO USER ID')}")
-    print(f"  Batch ID: {session['batch_id']}")
-    print(f"  Operator ID: {session['operator_id']}")
-    print(f"  Status: {session['status']}")
-    print(f"  Started: {session['started_at']}")
+rows = supabase.table("sessions").select("*").eq("batch_id", BATCH).execute().data
+
+print(f"Found {len(rows)} session(s) with batch_id '{BATCH}':")
+for s in rows:
+    print(f"  Session ID: {s['id']}")
+    print(f"  User ID: {s.get('user_id') or 'NO USER ID'}")
+    print(f"  Batch ID: {s['batch_id']}")
+    print(f"  Operator ID: {s['operator_id']}")
+    print(f"  Status: {s['status']}")
+    print(f"  Started: {s['started_at']}")
     print("  ---")

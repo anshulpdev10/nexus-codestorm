@@ -10,7 +10,7 @@ nexus_codestorm/
 ├── Backend/                          # Flask backend (port 5000)
 │   ├── core/
 │   │   ├── app.py                   # Flask app, REST routes, WebSocket stream
-│   │   ├── database.py              # MongoDB operations
+│   │   ├── database.py              # Supabase data access
 │   │   ├── detection.py             # YOLO detection (auto-detects v5/v8 weights)
 │   │   └── tracker.py               # Centroid tracking
 │   ├── services/
@@ -22,7 +22,7 @@ nexus_codestorm/
 │   ├── models/
 │   │   ├── box_detection.pt         # Custom trained model (default)
 │   │   └── yolov8n.pt               # Fallback if the custom model is missing
-│   ├── .env                          # MONGO_URI, MODEL_PATH, JWT_SECRET
+│   ├── supabase_schema.sql           # Supabase tables (run once)
 │   ├── requirements.txt
 │   └── README.md                     # Backend API documentation
 │
@@ -62,6 +62,6 @@ npm run dev
 
 Or run `start.bat` from the project root on Windows; it uses `Backend/venv` when present.
 
-All backend paths (`.env`, models, `data/`) are resolved relative to the source files, so the backend works regardless of the current working directory as long as it is started as a module (`python -m core.app`) from `Backend/`.
+Backend settings come from environment variables (`SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `JWT_SECRET`, `MODEL_PATH`). All backend paths (models, `data/`) are resolved relative to the source files, so the backend works regardless of the current working directory as long as it is started as a module (`python -m core.app`) from `Backend/`.
 
 Debug scripts are run the same way, e.g. `python -m scripts.test_routes`.

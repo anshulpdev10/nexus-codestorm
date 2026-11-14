@@ -2,10 +2,9 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Play, Square, RotateCcw, Camera, User, Hash, Box, Package, Upload, Video, BarChart2, List, Activity, Maximize2, Settings2, Download } from 'lucide-react'
 import { useSession } from '../context/SessionContext'
-import { getSessions, uploadVideo, validateBatch, validateOperator, updateConfidence } from '../api'
+import { getSessions, uploadVideo, validateBatch, validateOperator, updateConfidence, togglePause, resetSession, getVideoDownloadUrl } from '../api'
 import { FadeUp, ScalePop } from '../components/Motion'
 import Tooltip from '../components/Tooltip'
-import axios from 'axios'
 
 const BATCH_RE = /^[A-Z][A-Z0-9]*-\d{3,}$/
 const OPERATOR_RE = /^OP-\d{3,}$/
@@ -22,6 +21,7 @@ export default function Dashboard() {
   const [batchChecking, setBatchChecking] = useState(false)
   const [operatorError, setOperatorError] = useState('')
   const [operatorChecking, setOperatorChecking] = useState(false)
+  const [uploadError, setUploadError] = useState('')
 
   // Interactive mockup state
   const [confidence, setConfidence] = useState(35) // Default 35% to match backend
@@ -65,7 +65,7 @@ export default function Dashboard() {
 
   const handlePause = useCallback(async () => {
     try {
-      const { data } = await axios.post('http://localhost:5000/control/pause')
+      const { data } = await togglePause()
       setIsPaused(data.paused)
     } catch (error) {
       console.error('Failed to toggle pause:', error)
@@ -75,7 +75,7 @@ export default function Dashboard() {
   const handleReset = useCallback(async () => {
     setIsResetting(true)
     try {
-      await axios.post('http://localhost:5000/control/reset')
+      await resetSession()
       // After reset, keep paused state so user can resume
       setIsPaused(true)
       // Show notification
@@ -154,11 +154,13 @@ export default function Dashboard() {
   const handleStart = useCallback(async () => {
     if (source === 'video' && videoFile) {
       setUploading(true)
+      setUploadError('')
       try {
         const { data } = await uploadVideo(videoFile)
         start({ batchId, operatorId, videoPath: data.path, confidence: confidence / 100 })
-      } catch {
-        // error handled by ws hook
+      } catch (e) {
+        // Previously swallowed silently; show why the upload failed
+        setUploadError(e.response?.data?.error || 'Video upload failed. Is the backend running?')
       } finally {
         setUploading(false)
       }
@@ -294,9 +296,9 @@ export default function Dashboard() {
             </button>
           </Tooltip>
 
-          {error && (
+          {(error || uploadError) && (
             <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 animate-in fade-in">
-              <p className="text-red-400 text-sm font-semibold text-center flex items-center justify-center gap-2"><Activity size={16} /> {error}</p>
+              <p className="text-red-400 text-sm font-semibold text-center flex items-center justify-center gap-2"><Activity size={16} /> {error || uploadError}</p>
             </div>
           )}
         </div>
@@ -322,7 +324,7 @@ export default function Dashboard() {
                   <span className="text-sky-400 font-extrabold tabular-nums bg-sky-400/10 px-2.5 py-0.5 rounded-lg border border-sky-400/20">{s.final_count ?? '—'} <span className="text-[10px] text-sky-500 uppercase tracking-widest">box</span></span>
                   {s.video_path && (
                     <Tooltip label="Download video">
-                      <button onClick={() => window.open(`http://localhost:5000/sessions/${s._id}/video`, '_blank')}
+                      <button onClick={() => window.open(getVideoDownloadUrl(s._id), '_blank')}
                         className="w-7 h-7 flex items-center justify-center rounded-lg bg-gray-800 hover:bg-teal-700 border border-gray-700 hover:border-teal-600 text-gray-500 hover:text-teal-400 transition-colors">
                         <Download size={12} />
                       </button>

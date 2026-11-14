@@ -1,16 +1,48 @@
-# React + Vite
+# BoxGuard Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+The React dashboard for BoxGuard: live box counting, session history, challans, and analytics.
 
-Currently, two official plugins are available:
+> For setup and the full project guide, see the [project README](../README.md).
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Quick start
 
-## React Compiler
+```bash
+cd Frontend
+npm install
+npm run dev          # http://localhost:5173
+```
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+The dev server proxies `/api` to the backend on port 5000. The backend must be running for sign-in, sessions and the live feed.
 
-## Expanding the ESLint configuration
+## Scripts
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+| Command | What it does |
+|---|---|
+| `npm run dev` | Start the dev server with hot reload |
+| `npm run build` | Build a production bundle into `dist/` |
+| `npm run preview` | Serve the production build locally |
+| `npm run lint` | Run ESLint |
+
+## Structure
+
+```
+src/
+├── pages/
+│   ├── Landing.jsx        Public home page
+│   ├── Login.jsx          Sign in
+│   ├── Signup.jsx         Create an account
+│   ├── Dashboard.jsx      Start a session and watch the live count
+│   ├── Sessions.jsx       Session history, recordings and challans
+│   ├── OperatorStats.jsx  Analytics and PDF export
+│   └── Profile.jsx        Warehouse and challan details
+├── components/            Header, navigation, route guard, tooltip, animations
+├── context/               SessionContext: shared live-session state
+├── hooks/useWebSocket.js  Connects to the backend stream
+└── api/index.js           REST calls to the backend
+```
+
+## Notes
+
+- Sign-in state is kept in `localStorage` (`token` and `user`). Signing out clears both.
+- The backend address (`localhost:5000`) is set in `src/api/index.js` (REST and `WS_URL`). Some pages also call it directly (`Dashboard.jsx`, `Sessions.jsx`), so change those too when deploying.
+- The analytics page includes jsPDF, which makes its bundle larger. Vite warns about this during build. It is harmless.

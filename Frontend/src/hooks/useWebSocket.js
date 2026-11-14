@@ -22,15 +22,12 @@ export default function useWebSocket() {
     wsRef.current = ws
 
     ws.onopen = () => {
-      // Get user data from localStorage
-      const userData = localStorage.getItem('user')
-      const user = userData ? JSON.parse(userData) : null
-      
-      const payload = { 
-        action: 'start', 
-        batch_id: batchId, 
+      // The backend identifies the user from this signed token (not a client-sent id)
+      const payload = {
+        action: 'start',
+        batch_id: batchId,
         operator_id: operatorId,
-        user_id: user?.user_id || null  // Include user_id in WebSocket message
+        token: localStorage.getItem('token') || '',
       }
       if (videoPath) payload.video_path = videoPath
       else payload.camera_index = cameraIndex ?? 0

@@ -1,184 +1,81 @@
 # BoxGuard Backend
 
-Professional Flask-based backend for the Warehouse Box Counter system.
+The Flask API behind BoxGuard. It runs the YOLO box counter, streams live frames over WebSocket, stores data in Supabase, and generates challan PDFs.
 
-## Project Structure
+> For the full API and setup guide, see the [project README](../README.md).
 
-```
-Backend/
-├── core/                     # Core application modules
-│   ├── __init__.py
-│   ├── app.py               # Main Flask application
-│   ├── database.py          # MongoDB operations
-│   ├── detection.py         # YOLO box detection
-│   └── tracker.py           # Centroid tracking algorithm
-├── services/                # Business logic services
-│   ├── __init__.py
-│   ├── video_recorder.py    # Video recording service
-│   └── pdf_generator.py     # PDF challan generation
-├── auth/                    # Authentication (optional)
-│   ├── __init__.py
-│   └── auth.py              # JWT-based authentication
-├── scripts/                 # Manual debug/diagnostic scripts (run with python -m scripts.<name>)
-│   ├── check_sessions.py
-│   ├── debug_batch.py
-│   ├── start_server.py      # Dependency check + start
-│   ├── test_confidence.py
-│   ├── test_imports.py
-│   ├── test_routes.py
-│   └── test_server.html
-├── models/                  # YOLO model files
-│   ├── box_detection.pt    # Custom trained model
-│   └── yolov8n.pt          # Fallback generic model
-├── .env                     # Environment configuration
-├── requirements.txt         # Python dependencies
-└── README.md               # This file
-```
+## Setup
 
-## Quick Start
-
-### 1. Install Dependencies
+**Requirements:** Python 3.10+ and a Supabase project.
 
 ```bash
 cd Backend
 pip install -r requirements.txt
 ```
 
-### 2. Configure Environment
+**1. Create the database tables.** In the Supabase dashboard, open **SQL Editor**, paste [`supabase_schema.sql`](supabase_schema.sql), and run it. Safe to re-run.
 
-Edit `.env` file with your MongoDB connection:
+**2. Set environment variables** in the terminal you run the backend from:
 
-```env
-MONGO_URI=mongodb+srv://username:password@cluster.mongodb.net/warehouse_counter
-MODEL_PATH=models/box_detection.pt
-JWT_SECRET=your-secret-key
-```
+| Variable | Where to find it |
+|---|---|
+| `SUPABASE_URL` | Project Settings → API → Project URL |
+| `SUPABASE_SERVICE_KEY` | Project Settings → API keys → secret / `service_role` key |
+| `JWT_SECRET` | Any long random string |
+| `MODEL_PATH` | `models/box_detection.pt` (optional, default) |
 
-### 3. Run Server
+Windows (PowerShell): `$env:SUPABASE_URL = "https://…"`. macOS/Linux: `export SUPABASE_URL="https://…"`.
+
+**3. Run.**
 
 ```bash
 python -m core.app
 ```
 
-Or use the helper script:
+The API listens on **http://localhost:5000**. Check it with `GET /health`.
+
+## Project layout
+
+```
+Backend/
+├── core/
+│   ├── app.py              Flask routes and WebSocket stream
+│   ├── database.py         Supabase data access (sessions, logs, stats)
+│   ├── detection.py        YOLO loading, inference and overlay drawing
+│   └── tracker.py          Centroid tracker, so each box is counted once
+├── auth/
+│   └── auth.py             Signup, login, bcrypt hashing and JWT tokens
+├── services/
+│   ├── video_recorder.py   Saves each session as a video file
+│   └── pdf_generator.py    Builds the challan PDF with ReportLab
+├── scripts/                Debug helpers (run with python -m scripts.<name>)
+├── models/                 box_detection.pt (custom), yolov8n.pt (fallback)
+├── supabase_schema.sql     Database tables and security settings
+└── requirements.txt
+```
+
+## Data
+
+| Table | Holds |
+|---|---|
+| `users` | Accounts, warehouse and challan details (passwords are bcrypt hashes) |
+| `sessions` | Batch, operator, box count, status, and paths to recordings and uploads |
+| `detection_logs` | Box counts and confidence sampled during a session. Deleted with their session. |
+
+Row-level security is on for all three tables, with no public policies. The backend's service key can read and write them.
+
+## Helper scripts
+
+Run from the `Backend/` folder:
 
 ```bash
-python -m scripts.start_server
+python -m scripts.check_sessions     # count sessions and print operator stats
+python -m scripts.debug_batch        # show every session for one batch
+python -m scripts.start_server       # check dependencies, then start the API
 ```
 
-Server runs on `http://localhost:5000`
+## Development notes
 
-## API Endpoints
-
-### Health
-- `GET /` - Health check
-- `GET /health` - Health status
-
-### Authentication (Optional)
-- `POST /auth/signup` - Register new user
-- `POST /auth/login` - User login
-- `GET /auth/verify` - Verify JWT token
-- `GET /auth/me` - Get current user profile
-- `GET /profile` - Get user profile
-- `PUT /profile` - Update user profile
-
-### Validation
-- `POST /validate/batch` - Validate batch ID
-- `POST /validate/operator` - Validate operator ID
-
-### Sessions
-- `GET /sessions` - List all sessions (user-scoped)
-- `GET /sessions/<id>` - Get session details
-- `DELETE /sessions/<id>` - Delete session
-- `GET /sessions/<id>/logs` - Get detection logs
-- `POST /sessions/<id>/challan` - Generate PDF challan
-
-### Stats
-- `GET /stats/operators` - Get operator statistics
-
-### Video
-- `POST /upload` - Upload video file
-- `GET /sessions/<id>/video` - Download session video
-- `GET /sessions/<id>/video/stream` - Stream session video
-- `GET /sessions/<id>/upload/stream` - Stream uploaded video
-
-### WebSocket
-- `WS /ws/stream` - Live detection stream
-
-## WebSocket Protocol
-
-### Connect & Start Session
-
-```json
-{
-  "action": "start",
-  "batch_id": "BATCH-001",
-  "operator_id": "OP-001",
-  "camera_index": 0,
-  "video_path": null,
-  "confidence": 0.35,
-  "user_id": "optional_user_id"
-}
-```
-
-### Receive Frames
-
-```json
-{
-  "frame": "base64_encoded_jpeg",
-  "count": 15,
-  "session_active": true,
-  "session_id": "session_id_here"
-}
-```
-
-## Dependencies
-
-- **Flask** - Web framework
-- **flask-cors** - CORS support
-- **flask-sock** - WebSocket support
-- **pymongo** - MongoDB driver
-- **opencv-python** - Computer vision
-- **ultralytics** - YOLOv8 detection
-- **reportlab** - PDF generation
-- **bcrypt** - Password hashing (optional)
-- **pyjwt** - JWT tokens (optional)
-
-## Architecture
-
-- **Flask App**: REST API + WebSocket server
-- **MongoDB Atlas**: Cloud database for sessions and logs
-- **YOLO Detection**: Real-time box counting
-- **Centroid Tracking**: Stable object tracking across frames
-- **Video Recording**: MP4 session recordings
-- **PDF Generation**: Professional challan documents
-
-## Development
-
-### Run Tests
-
-```bash
-cd tests
-python test_imports.py
-python test_routes.py
-python test_confidence.py
-```
-
-### Debug
-
-```bash
-python -m scripts.check_sessions
-python -m scripts.debug_batch
-```
-
-## Production Notes
-
-- Set `debug=False` in `app.run()`
-- Use a production WSGI server (gunicorn, uwsgi)
-- Set strong `JWT_SECRET` in production
-- Configure proper CORS origins
-- Use HTTPS in production
-
-## License
-
-Proprietary - BoxGuard Systems
+- The detection model loads once at start-up. Each new session creates its own counter and tracker.
+- Generated files go in `../data/` (`uploads/`, `recordings/`, `challans/`). The folder is git-ignored.
+- Before deploying, see the **Security Notes** in the project README.

@@ -31,7 +31,7 @@ class VideoRecorder:
                 self.writer = writer
                 self.output_path = path
                 self.active = True
-                print(f"[Recorder] Using codec {fourcc_str} → {filename}")
+                print(f"[Recorder] Using codec {fourcc_str} -> {filename}")
                 break
             writer.release()
 

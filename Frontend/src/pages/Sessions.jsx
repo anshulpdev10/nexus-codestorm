@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { getSessions, getVideoUrl, getUploadUrl, downloadChallan, deleteSession } from '../api'
+import { getSessions, getVideoUrl, getUploadUrl, getVideoDownloadUrl, downloadChallan, deleteSession } from '../api'
 import {
   ClipboardList, Play, X, RefreshCw, Box, Clock,
   Camera, Upload, Film, AlertCircle, Search,
@@ -142,12 +142,18 @@ function ChallanModal({ session, onClose }) {
     .replace(/[^a-zA-Z0-9_-]/g, '_')
   const [fileName, setFileName] = useState(defaultName)
 
+  // Keep the blob URL in a ref so the cleanup sees the latest value
+  // (the closure over the `pdfUrl` state would always be null here).
+  const pdfUrlRef = useRef(null)
+
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset loading state before fetch
     setLoading(true)
     setError(false)
     downloadChallan(session._id)
       .then(({ data }) => {
         const url = URL.createObjectURL(new Blob([data], { type: 'application/pdf' }))
+        pdfUrlRef.current = url
         setPdfUrl(url)
       })
       .catch((err) => {
@@ -155,14 +161,14 @@ function ChallanModal({ session, onClose }) {
         setError(true)
       })
       .finally(() => setLoading(false))
-    
-    // Cleanup: revoke the URL when component unmounts
+
+    // Cleanup: revoke the blob URL when the session changes or the modal closes
     return () => {
-      if (pdfUrl) {
-        URL.revokeObjectURL(pdfUrl)
+      if (pdfUrlRef.current) {
+        URL.revokeObjectURL(pdfUrlRef.current)
+        pdfUrlRef.current = null
       }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session._id])
 
   useEffect(() => {
@@ -715,7 +721,7 @@ export default function Sessions() {
                             </button>
                           </Tooltip>
                           <Tooltip label="Download video file">
-                            <button onClick={() => window.open(`http://localhost:5000/sessions/${s._id}/video`, '_blank')}
+                            <button onClick={() => window.open(getVideoDownloadUrl(s._id), '_blank')}
                               className="flex items-center gap-1.5 text-xs bg-gray-800 hover:bg-teal-700 border border-teal-600 text-teal-400 hover:text-white px-2.5 py-1.5 rounded-xl transition-colors font-medium">
                               <Download size={11} /> Video
                             </button>

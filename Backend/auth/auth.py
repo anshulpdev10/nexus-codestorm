@@ -1,5 +1,3 @@
-from pymongo import MongoClient
-from bson import ObjectId
 from datetime import datetime, timezone, timedelta
 from dotenv import load_dotenv
 from typing import Tuple, Dict, Optional
@@ -10,21 +8,34 @@ import re
 
 load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"))
 
-MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
-DB_NAME = "warehouse_counter"
+# Shared Supabase client (defined in core.database). Imported lazily so this
+# module can still be imported for offline checks (password/JWT helpers).
 JWT_SECRET = os.getenv("JWT_SECRET", "your-secret-key-change-in-production")
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = 24
-
-client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
-db = client[DB_NAME]
-users_col = db["users"]
+USERS = "users"
 
 # Password validation regex
 PASSWORD_MIN_LENGTH = 8
 PASSWORD_REGEX = re.compile(
     r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$'
 )
+
+
+def _db():
+    from core.database import supabase
+    return supabase
+
+
+def _out(row):
+    """Rename `id` -> `_id` (same contract as before)."""
+    if row is None:
+        return None
+    row = dict(row)
+    if "id" in row:
+        row["_id"] = str(row.pop("id"))
+    return row
+
 
 def validate_password(password: str) -> Tuple[bool, str]:
     """Validate password strength. Returns (is_valid, error_message)"""
@@ -74,8 +85,13 @@ def verify_token(token: str) -> Dict:
         raise ValueError("Invalid token")
 
 
-def create_user(email: str, password: str, warehouse_name: str, 
-                warehouse_location: str, contact_name: str, 
+def _find_user_by_email(email: str) -> Optional[Dict]:
+    rows = _db().table(USERS).select("*").eq("email", email).limit(1).execute().data
+    return rows[0] if rows else None
+
+
+def create_user(email: str, password: str, warehouse_name: str,
+                warehouse_location: str, contact_name: str,
                 contact_phone: Optional[str] = None,
                 ms_name: Optional[str] = None,
                 transporter_id: Optional[str] = None,
@@ -88,16 +104,16 @@ def create_user(email: str, password: str, warehouse_name: str,
     email = email.lower().strip()
     if not re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', email):
         return False, "Invalid email format", None
-    
+
     # Check if user already exists
-    if users_col.find_one({"email": email}):
+    if _find_user_by_email(email):
         return False, "Email already registered", None
-    
+
     # Validate password
     is_valid, error_msg = validate_password(password)
     if not is_valid:
         return False, error_msg, None
-    
+
     # Validate required fields
     if not warehouse_name or not warehouse_name.strip():
         return False, "Warehouse name is required", None
@@ -111,14 +127,10 @@ def create_user(email: str, password: str, warehouse_name: str,
         return False, "Transporter ID is required", None
     if not courier_partner or not courier_partner.strip():
         return False, "Courier partner is required", None
-    
-    # Hash password
-    hashed_password = hash_password(password)
-    
-    # Create user document
-    user_doc = {
+
+    user_row = {
         "email": email,
-        "password": hashed_password,
+        "password": hash_password(password),
         "warehouse_name": warehouse_name.strip(),
         "warehouse_location": warehouse_location.strip(),
         "contact_name": contact_name.strip(),
@@ -126,17 +138,16 @@ def create_user(email: str, password: str, warehouse_name: str,
         "ms_name": ms_name.strip(),
         "transporter_id": transporter_id.strip().upper(),
         "courier_partner": courier_partner.strip(),
-        "created_at": datetime.now(timezone.utc),
+        "created_at": datetime.now(timezone.utc).isoformat(),
         "last_login": None,
-        "is_active": True
+        "is_active": True,
     }
-    
-    result = users_col.insert_one(user_doc)
-    user_id = str(result.inserted_id)
-    
-    # Generate token
+
+    result = _db().table(USERS).insert(user_row).execute()
+    user_id = str(result.data[0]["id"])
+
     token = generate_token(user_id, email)
-    
+
     user_data = {
         "user_id": user_id,
         "email": email,
@@ -148,7 +159,7 @@ def create_user(email: str, password: str, warehouse_name: str,
         "courier_partner": courier_partner.strip(),
         "token": token
     }
-    
+
     return True, "User created successfully", user_data
 
 
@@ -158,60 +169,60 @@ def login_user(email: str, password: str) -> Tuple[bool, str, Optional[Dict]]:
     Returns (success, message, user_data)
     """
     email = email.lower().strip()
-    
-    # Find user
-    user = users_col.find_one({"email": email})
+
+    user = _find_user_by_email(email)
     if not user:
         return False, "Invalid email or password", None
-    
-    # Check if account is active
+
     if not user.get("is_active", True):
         return False, "Account is deactivated", None
-    
-    # Verify password
+
     if not verify_password(password, user["password"]):
         return False, "Invalid email or password", None
-    
-    # Update last login
-    users_col.update_one(
-        {"_id": user["_id"]},
-        {"$set": {"last_login": datetime.now(timezone.utc)}}
-    )
-    
-    # Generate token
-    user_id = str(user["_id"])
+
+    _db().table(USERS).update(
+        {"last_login": datetime.now(timezone.utc).isoformat()}
+    ).eq("id", user["id"]).execute()
+
+    user_id = str(user["id"])
     token = generate_token(user_id, email)
-    
+
     user_data = {
         "user_id": user_id,
         "email": user["email"],
         "warehouse_name": user["warehouse_name"],
         "warehouse_location": user["warehouse_location"],
         "contact_name": user["contact_name"],
-        "ms_name": user.get("ms_name", ""),
-        "transporter_id": user.get("transporter_id", ""),
-        "courier_partner": user.get("courier_partner", ""),
+        "ms_name": user.get("ms_name") or "",
+        "transporter_id": user.get("transporter_id") or "",
+        "courier_partner": user.get("courier_partner") or "",
         "token": token
     }
-    
+
     return True, "Login successful", user_data
 
 
 def get_user_by_id(user_id: str) -> Optional[Dict]:
     """Get user by ID (without password)"""
-    user = users_col.find_one({"_id": ObjectId(user_id)})
-    if user:
-        user["_id"] = str(user["_id"])
-        user.pop("password", None)  # Remove password from response
+    try:
+        rows = _db().table(USERS).select("*").eq("id", user_id).limit(1).execute().data
+    except Exception as e:
+        print(f"[get_user_by_id] lookup failed: {e}")
+        return None
+    if not rows:
+        return None
+    user = _out(rows[0])
+    user.pop("password", None)
     return user
 
 
 def get_user_by_email(email: str) -> Optional[Dict]:
     """Get user by email (without password)"""
-    user = users_col.find_one({"email": email.lower().strip()})
-    if user:
-        user["_id"] = str(user["_id"])
-        user.pop("password", None)
+    user = _find_user_by_email(email.lower().strip())
+    if not user:
+        return None
+    user = _out(user)
+    user.pop("password", None)
     return user
 
 
@@ -221,9 +232,6 @@ def update_user(user_id: str, update_fields: Dict) -> Tuple[bool, str]:
     Returns (success, message)
     """
     try:
-        from bson import ObjectId
-        
-        # Validate required fields if they're being updated
         if "warehouse_name" in update_fields and not update_fields["warehouse_name"].strip():
             return False, "Warehouse name cannot be empty"
         if "warehouse_location" in update_fields and not update_fields["warehouse_location"].strip():
@@ -236,16 +244,11 @@ def update_user(user_id: str, update_fields: Dict) -> Tuple[bool, str]:
             return False, "Transporter ID cannot be empty"
         if "courier_partner" in update_fields and not update_fields["courier_partner"].strip():
             return False, "Courier partner cannot be empty"
-        
-        # Update user
-        result = users_col.update_one(
-            {"_id": ObjectId(user_id)},
-            {"$set": update_fields}
-        )
-        
-        if result.matched_count == 0:
+
+        rows = _db().table(USERS).update(update_fields).eq("id", user_id).execute().data
+        if not rows:
             return False, "User not found"
-        
+
         return True, "Profile updated successfully"
     except Exception as e:
         return False, f"Update failed: {str(e)}"

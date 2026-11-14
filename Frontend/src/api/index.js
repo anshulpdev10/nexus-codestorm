@@ -29,8 +29,13 @@ export const getSessions      = ()    => api.get('/sessions')
 export const getSession       = (id)  => api.get(`/sessions/${id}`)
 export const getSessionLogs   = (id)  => api.get(`/sessions/${id}/logs`)
 export const getOperatorStats = ()    => api.get('/stats/operators')
-export const getVideoUrl      = (id, speed = 1)  => `${baseURL}/sessions/${id}/video/stream?speed=${speed}`
-export const getUploadUrl     = (id, speed = 1)  => `${baseURL}/sessions/${id}/upload/stream?speed=${speed}`
+// <img>, <video> and window.open() cannot send an Authorization header, so media
+// URLs carry the session token as a query parameter (the backend accepts this
+// only on these media routes).
+const tokenParam = () => `token=${encodeURIComponent(localStorage.getItem('token') || '')}`
+export const getVideoUrl      = (id, speed = 1)  => `${baseURL}/sessions/${id}/video/stream?speed=${speed}&${tokenParam()}`
+export const getUploadUrl     = (id, speed = 1)  => `${baseURL}/sessions/${id}/upload/stream?speed=${speed}&${tokenParam()}`
+export const getVideoDownloadUrl = (id)          => `${baseURL}/sessions/${id}/video?${tokenParam()}`
 export const uploadVideo      = (file) => {
   const form = new FormData()
   form.append('video', file)

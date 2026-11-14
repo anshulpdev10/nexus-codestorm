@@ -6,7 +6,8 @@ import re
 import sys
 import cv2
 import numpy as np
-from flask import Flask, jsonify, send_file, request, Response
+import functools
+from flask import Flask, jsonify, send_file, request, Response, g
 from flask_cors import CORS
 from flask_sock import Sock
 from dotenv import load_dotenv
@@ -27,7 +28,7 @@ from core.database import (
 
 # Try to import auth module, but don't fail if dependencies are missing
 try:
-    from auth.auth import create_user, login_user, verify_token, get_user_by_id
+    from auth.auth import create_user, login_user, verify_token, get_user_by_id, update_user
     AUTH_ENABLED = True
     print("[main] ✓ Authentication module loaded successfully")
 except ImportError as e:
@@ -41,21 +42,65 @@ from core.detection import BoxCounter
 
 
 # ── Authentication Middleware ─────────────────────────────────────────────────
-def get_current_user_id():
-    """Extract user_id from JWT token in Authorization header."""
+def _user_from_request(allow_query_token=False):
+    """Return the verified user_id from a Bearer header (or ?token= when allowed).
+
+    Browsers cannot send an Authorization header from <img src>, <video> or
+    window.open(), so media routes accept the token as a query parameter.
+    """
     if not AUTH_ENABLED:
         return None
 
+    token = None
     auth_header = request.headers.get("Authorization", "")
-    if not auth_header.startswith("Bearer "):
+    if auth_header.startswith("Bearer "):
+        token = auth_header[len("Bearer "):]
+    elif allow_query_token:
+        token = request.args.get("token")
+
+    if not token:
+        return None
+    try:
+        return verify_token(token).get("user_id")
+    except Exception:
         return None
 
-    token = auth_header.replace("Bearer ", "")
-    try:
-        payload = verify_token(token)
-        return payload.get("user_id")
-    except:
+
+def _user_from_request_token(token):
+    """Verify a raw JWT string (used by the WebSocket start message)."""
+    if not AUTH_ENABLED or not token:
         return None
+    try:
+        return verify_token(token).get("user_id")
+    except Exception:
+        return None
+
+
+def get_current_user_id():
+    """The verified user for this request (set by @login_required)."""
+    if hasattr(g, "user_id"):
+        return g.user_id
+    return _user_from_request()
+
+
+def login_required(allow_query_token=False):
+    """Reject the request with 401 unless it carries a valid token.
+
+    Every session, control and upload route is user-scoped, so none of them
+    may run without a verified user (an unscoped lookup would expose all data).
+    """
+    def decorator(fn):
+        @functools.wraps(fn)
+        def wrapper(*args, **kwargs):
+            if request.method == "OPTIONS":  # CORS preflight is answered by the route
+                return fn(*args, **kwargs)
+            user_id = _user_from_request(allow_query_token)
+            if not user_id:
+                return jsonify({"error": "Unauthorized"}), 401
+            g.user_id = user_id
+            return fn(*args, **kwargs)
+        return wrapper
+    return decorator
 
 
 def require_auth():
@@ -163,7 +208,8 @@ def signup():
 
     try:
         data = request.get_json(silent=True) or {}
-        print(f"[signup] Received data: {data}")
+        # Never log the raw body: it contains the plaintext password
+        print(f"[signup] Received data for: {data.get('email', '')}")
 
         email              = data.get("email", "").strip()
         password           = data.get("password", "")
@@ -311,16 +357,10 @@ def profile():
             if not update_fields:
                 return jsonify({"error": "No fields to update"}), 400
 
-            from core.database import db
-            from bson import ObjectId
-
-            result = db.users.update_one(
-                {"_id": ObjectId(user_id)},
-                {"$set": update_fields}
-            )
-
-            if result.modified_count == 0:
-                return jsonify({"error": "No changes made"}), 400
+            # Saving unchanged values is not an error (update_user checks existence, not change)
+            ok, msg = update_user(user_id, update_fields)
+            if not ok:
+                return jsonify({"error": msg}), (404 if msg == "User not found" else 400)
 
             user = get_user_by_id(user_id)
             return jsonify({
@@ -417,6 +457,7 @@ def get_current_user():
 
 # ── Batch / Operator Validation ───────────────────────────────────────────────
 @app.route("/validate/batch", methods=["POST", "OPTIONS"])
+@login_required()
 def validate_batch():
     # Handle preflight request
     if request.method == "OPTIONS":
@@ -461,6 +502,7 @@ def validate_operator():
 
 # ── Sessions ──────────────────────────────────────────────────────────────────
 @app.route("/sessions")
+@login_required()
 def get_sessions():
     """Get all sessions for the authenticated user."""
     user_id = get_current_user_id()
@@ -468,6 +510,7 @@ def get_sessions():
 
 
 @app.route("/sessions/<session_id>", methods=["GET", "DELETE", "OPTIONS"])
+@login_required()
 def session_detail(session_id):
     """Get or delete a specific session (user-scoped)."""
     if request.method == "OPTIONS":
@@ -510,6 +553,7 @@ def session_detail(session_id):
 
 
 @app.route("/sessions/<session_id>/logs")
+@login_required()
 def get_session_logs(session_id):
     """Get logs for a specific session (user-scoped)."""
     user_id = get_current_user_id()
@@ -520,6 +564,7 @@ def get_session_logs(session_id):
 
 
 @app.route("/sessions/<session_id>/challan", methods=["POST", "OPTIONS"])
+@login_required()
 def session_challan(session_id):
     """Generate and download challan PDF for a session (user-scoped)."""
     if request.method == "OPTIONS":
@@ -557,6 +602,7 @@ def session_challan(session_id):
 
 
 @app.route("/stats/operators")
+@login_required()
 def operator_stats():
     """Get operator statistics for the authenticated user."""
     user_id = get_current_user_id()
@@ -564,6 +610,7 @@ def operator_stats():
 
 
 @app.route("/upload", methods=["POST", "OPTIONS"])
+@login_required()
 def upload_video():
     """Handle video file uploads."""
     if request.method == "OPTIONS":
@@ -635,6 +682,7 @@ def _mjpeg_stream(path):
 
 
 @app.route("/sessions/<session_id>/video")
+@login_required(allow_query_token=True)
 def session_video(session_id):
     """Download video for a session (user-scoped)."""
     user_id = get_current_user_id()
@@ -652,6 +700,7 @@ def session_video(session_id):
 
 
 @app.route("/sessions/<session_id>/video/stream")
+@login_required(allow_query_token=True)
 def session_video_stream(session_id):
     """Stream video for a session (user-scoped)."""
     user_id = get_current_user_id()
@@ -668,6 +717,7 @@ def session_video_stream(session_id):
 
 
 @app.route("/sessions/<session_id>/upload")
+@login_required(allow_query_token=True)
 def session_upload(session_id):
     """Serve uploaded file for a session (user-scoped)."""
     user_id = get_current_user_id()
@@ -685,6 +735,7 @@ def session_upload(session_id):
 
 
 @app.route("/sessions/<session_id>/upload/stream")
+@login_required(allow_query_token=True)
 def session_upload_stream(session_id):
     """Stream uploaded file for a session (user-scoped)."""
     user_id = get_current_user_id()
@@ -708,6 +759,7 @@ confidence_threshold = 0.35
 
 
 @app.route("/control/pause", methods=["POST", "OPTIONS"])
+@login_required()
 def control_pause():
     """Toggle pause state for the active session."""
     if request.method == "OPTIONS":
@@ -723,6 +775,7 @@ def control_pause():
 
 
 @app.route("/control/reset", methods=["POST", "OPTIONS"])
+@login_required()
 def control_reset():
     """Reset the video to frame 0 and clear count history."""
     if request.method == "OPTIONS":
@@ -739,6 +792,7 @@ def control_reset():
 
 
 @app.route("/settings/confidence", methods=["POST", "OPTIONS"])
+@login_required()
 def settings_confidence():
     """Update the confidence threshold for YOLO detection."""
     if request.method == "OPTIONS":
@@ -770,12 +824,17 @@ def websocket_stream(ws):
         ws.send(json.dumps({"error": "First message must have action=start"}))
         return
 
+    # The user comes from the verified JWT, never from a client-supplied user_id
+    user_id = _user_from_request_token(init.get("token"))
+    if not user_id:
+        ws.send(json.dumps({"error": "Unauthorized: sign in again"}))
+        return
+
     batch_id     = (init.get("batch_id") or "").strip().upper()
     operator_id  = (init.get("operator_id") or "").strip().upper()
     camera_index = int(init.get("camera_index", 0))
     video_path   = init.get("video_path", None)
     confidence   = float(init.get("confidence", 0.35))
-    user_id      = init.get("user_id", None)
 
     try:
         batch_error = _validate_batch_id(batch_id, user_id)

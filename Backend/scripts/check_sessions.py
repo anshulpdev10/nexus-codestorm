@@ -1,61 +1,42 @@
 #!/usr/bin/env python3
 """
-Quick script to check what sessions exist in MongoDB
+Quick script to check what sessions exist in Supabase.
+Run from the Backend folder:  python -m scripts.check_sessions
 """
-from core.database import sessions_col, list_sessions
-from bson import ObjectId
+from core.database import supabase, list_sessions, get_operator_stats
 
 print("=" * 60)
-print("MONGODB SESSIONS CHECK")
+print("SUPABASE SESSIONS CHECK")
 print("=" * 60)
 
-# Get total count
-total = sessions_col.count_documents({})
-print(f"\n📊 Total sessions in database: {total}")
+total = supabase.table("sessions").select("id", count="exact").execute().count or 0
+print(f"\nTotal sessions in database: {total}")
 
 if total == 0:
-    print("\n❌ No sessions found in database!")
+    print("\nNo sessions found in database!")
     print("\nPossible reasons:")
     print("  1. No sessions have been created yet")
-    print("  2. MongoDB connection issue")
-    print("  3. Wrong database/collection name")
+    print("  2. SUPABASE_URL / SUPABASE_SERVICE_KEY environment variables are wrong")
+    print("  3. Schema not applied (run Backend/supabase_schema.sql)")
 else:
-    print(f"\n✅ Found {total} sessions!\n")
-    
-    # Show all sessions
+    print(f"\nFound {total} sessions!\n")
     print("=" * 60)
     print("ALL SESSIONS:")
     print("=" * 60)
-    
-    for doc in sessions_col.find().sort("started_at", -1):
-        print(f"\n📦 Session ID: {doc['_id']}")
-        print(f"   User ID: {doc.get('user_id', 'NO USER ID')}")
+
+    for doc in list_sessions():
+        print(f"\nSession ID: {doc['_id']}")
+        print(f"   User ID: {doc.get('user_id') or 'NO USER ID'}")
         print(f"   Batch ID: {doc.get('batch_id', 'N/A')}")
         print(f"   Operator: {doc.get('operator_id', 'N/A')}")
         print(f"   Status: {doc.get('status', 'N/A')}")
         print(f"   Final Count: {doc.get('final_count', 'N/A')}")
         print(f"   Started: {doc.get('started_at', 'N/A')}")
         print(f"   Source: {doc.get('source_type', 'N/A')}")
-    
-    # Check sessions by user
-    print("\n" + "=" * 60)
-    print("SESSIONS BY USER:")
-    print("=" * 60)
-    
-    pipeline = [
-        {"$group": {
-            "_id": "$user_id",
-            "count": {"$sum": 1}
-        }},
-        {"$sort": {"count": -1}}
-    ]
-    
-    for result in sessions_col.aggregate(pipeline):
-        user_id = result['_id']
-        count = result['count']
-        print(f"\n👤 User: {user_id if user_id else 'NO USER ID'}")
-        print(f"   Sessions: {count}")
 
-print("\n" + "=" * 60)
-print("DONE")
-print("=" * 60)
+    print("\n" + "=" * 60)
+    print("OPERATOR STATS (completed sessions):")
+    print("=" * 60)
+    for op in get_operator_stats():
+        print(f"  {op['_id']}: {op['total_sessions']} sessions, "
+              f"{op['total_boxes']} boxes, avg {op['avg_count']:.1f}")

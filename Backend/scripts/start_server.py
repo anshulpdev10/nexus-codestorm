@@ -17,7 +17,7 @@ required_packages = {
     'flask': 'Flask',
     'flask_cors': 'Flask-CORS',
     'flask_sock': 'Flask-Sock',
-    'pymongo': 'PyMongo',
+    'supabase': 'Supabase client',
     'cv2': 'OpenCV',
     'numpy': 'NumPy',
     'dotenv': 'python-dotenv',
@@ -59,7 +59,7 @@ if missing_required:
     print("ERROR: Missing required dependencies!")
     print("=" * 60)
     print("\nPlease install missing packages:")
-    print("pip install flask flask-cors flask-sock pymongo opencv-python-headless numpy python-dotenv")
+    print("pip install flask flask-cors flask-sock supabase opencv-python-headless numpy python-dotenv")
     sys.exit(1)
 
 if missing_optional:
